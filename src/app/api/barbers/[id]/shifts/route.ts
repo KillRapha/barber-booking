@@ -1,13 +1,14 @@
+import { type NextRequest } from "next/server"
 import { requireAdmin } from "@/lib/authz"
 import { BarberService } from "@/services/barber.service"
 import { replaceShiftsSchema } from "@/validators/barber.validators"
 
-type Params = { params: Promise<{ id: string }> }
+type Ctx = { params: Promise<{ id: string }> }
 
-export async function GET(_: Request, { params }: Params): Promise<Response> {
+export async function GET(_req: NextRequest, ctx: Ctx): Promise<Response> {
   try {
     await requireAdmin()
-    const { id } = await params
+    const { id } = await ctx.params
 
     const service = new BarberService()
     const data = await service.listShifts(id)
@@ -21,10 +22,10 @@ export async function GET(_: Request, { params }: Params): Promise<Response> {
   }
 }
 
-export async function PUT(req: Request, { params }: Params): Promise<Response> {
+export async function PUT(req: NextRequest, ctx: Ctx): Promise<Response> {
   try {
     await requireAdmin()
-    const { id } = await params
+    const { id } = await ctx.params
 
     const body = await req.json()
     const input = replaceShiftsSchema.parse(body)
