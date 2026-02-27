@@ -1,0 +1,85 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DATABASE_URL_UNPOOLED")
+}
+
+enum AppointmentStatus {
+  SCHEDULED
+  CANCELED
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  cpf          String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  appointments Appointment[]
+}
+
+model Barber {
+  id        String   @id @default(cuid())
+  name      String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  shifts       WorkShift[]
+  appointments Appointment[]
+}
+
+model WorkShift {
+  id        String   @id @default(cuid())
+  barberId  String
+  weekday   Int
+  startMin  Int
+  endMin    Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  barber Barber @relation(fields: barberId, references: id, onDelete: Cascade)
+
+  @@index([barberId, weekday])
+  @@unique([barberId, weekday, startMin, endMin])
+}
+
+model Service {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  name        String
+  durationMin Int
+  priceCents  Int
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  appointments Appointment[]
+}
+
+model Appointment {
+  id              String            @id @default(cuid())
+  userId          String
+  barberId        String
+  serviceId       String
+  date            DateTime          @db.Date
+  startMin        Int
+  durationMin     Int
+  totalPriceCents Int
+  status          AppointmentStatus @default(SCHEDULED)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  user    User    @relation(fields: userId, references: id, onDelete: Restrict)
+  barber  Barber  @relation(fields: barberId, references: id, onDelete: Restrict)
+  service Service @relation(fields: serviceId, references: id, onDelete: Restrict)
+
+  @@index([barberId, date])
+  @@index([userId, date])
+}

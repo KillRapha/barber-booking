@@ -1,0 +1,93 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Opção A — Trust Blue (Light) */
+    --bg: 248 250 252;        /* #F8FAFC */
+    --surface: 255 255 255;   /* #FFFFFF */
+    --text: 15 23 42;         /* #0F172A */
+    --muted: 100 116 139;     /* #64748B */
+    --border: 226 232 240;    /* #E2E8F0 */
+
+    --primary: 37 99 235;     /* #2563EB */
+    --primaryText: 255 255 255;
+    --ring: 37 99 235;
+
+    --success: 22 163 74;     /* #16A34A */
+    --danger: 239 68 68;      /* #EF4444 */
+    --warning: 245 158 11;    /* #F59E0B */
+  }
+
+  /* Dark opcional (fica MUITO moderno) */
+  .dark {
+    --bg: 11 18 32;           /* #0B1220 */
+    --surface: 17 24 39;      /* #111827 */
+    --text: 241 245 249;      /* #F1F5F9 */
+    --muted: 148 163 184;     /* #94A3B8 */
+    --border: 31 41 55;       /* #1F2937 */
+
+    --primary: 37 99 235;
+    --primaryText: 255 255 255;
+    --ring: 37 99 235;
+  }
+
+  html, body {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-bg text-text antialiased;
+  }
+
+  /* Foco bonito (passa “app profissional”) */
+  :focus-visible {
+    outline: none;
+    @apply ring-2 ring-ring/40 ring-offset-2 ring-offset-bg;
+  }
+
+  ::selection {
+    background: rgb(var(--primary) / 0.18);
+  }
+}
+
+@layer components {
+  /* Base premium */
+  .container-app {
+    @apply mx-auto w-full max-w-md px-4;
+  }
+
+  .card {
+    @apply bg-surface border border-border rounded-2xl shadow-sm;
+  }
+
+  .btn-primary {
+    @apply h-12 px-4 rounded-2xl bg-primary text-primaryText font-medium shadow-sm
+           active:scale-[0.99] disabled:opacity-50 disabled:pointer-events-none;
+  }
+
+  .btn-ghost {
+    @apply h-12 px-4 rounded-2xl bg-transparent border border-border text-text font-medium
+           hover:bg-border/40 active:scale-[0.99];
+  }
+
+  .input {
+    @apply h-12 w-full rounded-xl bg-surface border border-border px-3 text-text
+           placeholder:text-muted;
+  }
+
+  .chip {
+    @apply inline-flex items-center justify-center rounded-xl border border-border bg-surface
+           px-3 py-2 text-sm text-text;
+  }
+
+  .chip-active {
+    @apply border-primary/40 bg-primary/10;
+  }
+}
+
+/* Transições só onde interessa */
+a, button, input, textarea, select {
+  @apply transition-colors duration-150;
+}
