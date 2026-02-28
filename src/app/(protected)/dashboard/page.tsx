@@ -7,9 +7,6 @@ export default async function DashboardPage() {
   const user = await getCurrentUser()
   if (!user) redirect("/login")
 
-  // ✅ ADMIN vai para o painel
-  if (user.role === "ADMIN") redirect("/admin")
-
   return (
     <PhoneFrame>
       <Dashboard userName={user.name} />
