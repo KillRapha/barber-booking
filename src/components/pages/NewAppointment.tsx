@@ -14,6 +14,15 @@ import { minutesToHHmm, toISODateOnly } from "@/lib/date"
 
 type ApiErr = { ok?: false; message?: string; error?: string }
 type ApiOk<T> = { ok?: true; data?: T }
+type ApiMaybeList<T> = ApiOk<T[]> & { barbers?: T[]; services?: T[] }
+
+type AvailabilitySlot = {
+  startMin: number
+  label: string
+  available?: boolean
+  booked?: boolean
+  isAvailable?: boolean
+}
 
 function cx(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ")
@@ -23,11 +32,11 @@ function money(cents: number): string {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cents / 100)
 }
 
-async function safeJson(res: Response): Promise<unknown> {
+async function safeJson<T>(res: Response): Promise<T | null> {
   const text = await res.text()
   if (!text) return null
   try {
-    return JSON.parse(text)
+    return JSON.parse(text) as T
   } catch {
     return null
   }
@@ -51,15 +60,13 @@ function formatDateBR(iso: string) {
 }
 
 /**
- * IMPORTANTÍSSIMO:
- * Para não exibir horários já ocupados, a API precisa indicar isso.
- * Aqui eu considero indisponível se vier: available=false, booked=true, isAvailable=false.
+ * Se a API marcar slot como indisponível com algum desses campos,
+ * removemos do grid (pra não aparecer para o cliente).
  */
-function slotIsUnavailable(slot: unknown): boolean {
-  const s = slot as Record<string, unknown>
-  if (s.available === false) return true
-  if (s.booked === true) return true
-  if (s.isAvailable === false) return true
+function slotIsUnavailable(slot: AvailabilitySlot): boolean {
+  if (slot.available === false) return true
+  if (slot.booked === true) return true
+  if (slot.isAvailable === false) return true
   return false
 }
 
@@ -84,7 +91,7 @@ export function NewAppointment() {
   const [barberId, setBarberId] = useState(preselectedBarberId)
   const [date, setDate] = useState(() => toISODateOnly(new Date()))
 
-  const [slots, setSlots] = useState<AvailabilityResponse["slots"]>([])
+  const [slots, setSlots] = useState<AvailabilitySlot[]>([])
   const [startMin, setStartMin] = useState<number | null>(null)
 
   const [loadingBase, setLoadingBase] = useState(true)
@@ -105,8 +112,8 @@ export function NewAppointment() {
           fetch("/api/services", { cache: "no-store" }),
         ])
 
-        const bJson = await safeJson(bRes)
-        const sJson = await safeJson(sRes)
+        const bJson = await safeJson<ApiMaybeList<BarberListItem>>(bRes)
+        const sJson = await safeJson<ApiMaybeList<ServiceItem>>(sRes)
 
         if (!alive) return
 
@@ -114,16 +121,16 @@ export function NewAppointment() {
           setBarbers([])
           setMessage(getErrorMessage(bJson, "Falha ao carregar barbeiros."))
         } else {
-          const obj = bJson as ApiOk<unknown> & { barbers?: unknown }
-          setBarbers(normalizeList<BarberListItem>(obj.data ?? obj.barbers))
+          const data = bJson?.data ?? bJson?.barbers
+          setBarbers(normalizeList<BarberListItem>(data))
         }
 
         if (!sRes.ok) {
           setServices([])
           setMessage((prev) => prev ?? getErrorMessage(sJson, "Falha ao carregar serviços."))
         } else {
-          const obj = sJson as ApiOk<unknown> & { services?: unknown }
-          setServices(normalizeList<ServiceItem>(obj.data ?? obj.services))
+          const data = sJson?.data ?? sJson?.services
+          setServices(normalizeList<ServiceItem>(data))
         }
       } catch {
         if (!alive) return
@@ -165,8 +172,11 @@ export function NewAppointment() {
         url.searchParams.set("barberId", barberId)
         url.searchParams.set("date", date)
 
+        // (Opcional) quando você evoluir a API para considerar duração do serviço:
+        // if (serviceId) url.searchParams.set("serviceId", serviceId)
+
         const res = await fetch(url.toString(), { cache: "no-store" })
-        const json = await safeJson(res)
+        const json = await safeJson<AvailabilityResponse & ApiErr>(res)
 
         if (!alive) return
 
@@ -176,12 +186,10 @@ export function NewAppointment() {
           return
         }
 
-        const data = json as AvailabilityResponse
-        const list = Array.isArray(data?.slots) ? data.slots : []
+        const list = Array.isArray(json?.slots) ? (json.slots as AvailabilitySlot[]) : []
 
         // Remove horários ocupados (se a API marcar)
-        const availableOnly = list.filter((s) => !slotIsUnavailable(s))
-        setSlots(availableOnly)
+        setSlots(list.filter((s) => !slotIsUnavailable(s)))
       } catch {
         if (!alive) return
         setSlots([])
@@ -196,7 +204,7 @@ export function NewAppointment() {
     return () => {
       alive = false
     }
-  }, [barberId, date])
+  }, [barberId, date /*, serviceId*/])
 
   async function confirm() {
     try {
@@ -213,7 +221,7 @@ export function NewAppointment() {
         body: JSON.stringify({ serviceId, barberId, date, startMin }),
       })
 
-      const json = await safeJson(res)
+      const json = await safeJson<ApiErr & { ok?: true }>(res)
 
       if (!res.ok) {
         setMessage(getErrorMessage(json, "Não foi possível agendar."))
@@ -245,7 +253,7 @@ export function NewAppointment() {
         </div>
       ) : null}
 
-      {/* SERVIÇO (horizontal + cards maiores) */}
+      {/* SERVIÇO */}
       <section className="mt-6">
         <h1 className="text-lg font-extrabold text-text">Serviço</h1>
         <p className="mt-1 text-sm text-muted">Escolha um serviço</p>
@@ -271,10 +279,7 @@ export function NewAppointment() {
                     key={s.id}
                     type="button"
                     onClick={() => setServiceId(s.id)}
-                    className={cx(
-                      "card min-w-[170px] p-4 text-left transition active:scale-[0.99]",
-                      active && "border-primary/40 bg-primary/5"
-                    )}
+                    className={cx("card min-w-[170px] p-4 text-left transition active:scale-[0.99]", active && "border-primary/40 bg-primary/5")}
                   >
                     <div className="flex items-center justify-between">
                       <div className="grid h-12 w-12 place-items-center rounded-2xl bg-primary/10">
@@ -308,7 +313,7 @@ export function NewAppointment() {
         <p className="mt-1 text-sm text-muted">Barbeiro, data e horário</p>
 
         <div className="mt-4 space-y-3">
-          {/* Barbeiro (travado se veio no query param) */}
+          {/* Barbeiro */}
           <div className="card p-4">
             <div className="flex items-center justify-between">
               <p className="text-xs font-semibold text-muted">Barbeiro</p>
@@ -407,9 +412,7 @@ export function NewAppointment() {
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
               <p className="text-xs font-semibold text-muted">Resumo</p>
-              <p className="mt-1 text-sm font-semibold text-text">
-                {service ? service.name : "Selecione um serviço"}
-              </p>
+              <p className="mt-1 text-sm font-semibold text-text">{service ? service.name : "Selecione um serviço"}</p>
               <p className="mt-1 text-xs text-muted">
                 {barber ? barber.name : "Selecione um barbeiro"}
                 {startMin !== null ? ` • ${minutesToHHmm(startMin)}` : ""}
@@ -419,15 +422,13 @@ export function NewAppointment() {
 
             <div className="text-right">
               <p className="text-xs font-semibold text-muted">Total</p>
-              <p className="mt-1 text-sm font-extrabold text-text">
-                {service ? money(service.priceCents) : "—"}
-              </p>
+              <p className="mt-1 text-sm font-extrabold text-text">{service ? money(service.priceCents) : "—"}</p>
             </div>
           </div>
         </div>
       </section>
 
-      {/* CTA (sempre visível) */}
+      {/* CTA */}
       <div className="fixed bottom-0 left-0 right-0 bg-bg/90 backdrop-blur border-t border-border">
         <div className="mx-auto w-full max-w-md px-5 pb-[max(env(safe-area-inset-bottom),12px)] pt-3">
           <button
@@ -436,9 +437,7 @@ export function NewAppointment() {
             disabled={!canConfirm}
             className={cx(
               "w-full h-12 rounded-2xl text-sm font-semibold transition active:scale-[0.99]",
-              canConfirm
-                ? "bg-primary text-primaryText shadow-sm"
-                : "border border-border bg-surface text-muted opacity-70"
+              canConfirm ? "bg-primary text-primaryText shadow-sm" : "border border-border bg-surface text-muted opacity-70"
             )}
           >
             {confirmLabel}
